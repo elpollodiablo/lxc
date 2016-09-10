@@ -217,7 +217,6 @@ struct wrapargs {
 	lxc_attach_options_t *options;
 	lxc_attach_command_t *command;
 	struct lxc_console *console;
-	int ptyfd;
 };
 
 /* Minimalistic login_tty() implementation. */
@@ -251,17 +250,11 @@ static int get_pty_on_host_callback(void *p)
 static int get_pty_on_host(struct lxc_container *c, struct wrapargs *wrap, int *pid)
 {
 	int ret = -1;
-	struct wrapargs *args = wrap;
 	struct lxc_epoll_descr descr;
 	struct lxc_conf *conf;
 	struct lxc_tty_state *ts;
 
 	INFO("Trying to allocate a pty on the host");
-
-	if (!isatty(args->ptyfd)) {
-		ERROR("Standard file descriptor does not refer to a pty\n.");
-		return -1;
-	}
 
 	conf = c->lxc_conf;
 	free(conf->console.log_path);
@@ -329,14 +322,18 @@ err1:
 	return ret;
 }
 
-static int stdfd_is_pty(void)
+static int have_ctty(void)
 {
-	if (isatty(STDIN_FILENO))
-		return STDIN_FILENO;
-	if (isatty(STDOUT_FILENO))
-		return STDOUT_FILENO;
-	if (isatty(STDERR_FILENO))
-		return STDERR_FILENO;
+	int fd;
+	if (!access("/dev/tty", F_OK) && (fd = open("/dev/tty", O_RDWR) >= 0)) {
+		close(fd);
+		if (isatty(STDIN_FILENO))
+			return STDIN_FILENO;
+		if (isatty(STDOUT_FILENO))
+			return STDOUT_FILENO;
+		if (isatty(STDERR_FILENO))
+			return STDERR_FILENO;
+	}
 
 	return -1;
 }
@@ -425,8 +422,7 @@ int main(int argc, char *argv[])
 			.options = &attach_options
 	};
 
-	wrap.ptyfd = stdfd_is_pty();
-	if (wrap.ptyfd >= 0) {
+	if (have_ctty() >= 0) {
 		if ((!isatty(STDOUT_FILENO) || !isatty(STDERR_FILENO)) && my_args.console_log) {
 			fprintf(stderr, "-L/--pty-log can only be used when stdout and stderr refer to a pty.\n");
 			goto out;
