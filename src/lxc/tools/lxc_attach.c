@@ -326,7 +326,7 @@ static int have_ctty(void)
 {
 	int fd;
 	if (!access("/dev/tty", F_OK) && (fd = open("/dev/tty", O_RDWR) >= 0)) {
-		close(fd);
+//		close(fd);
 		if (isatty(STDIN_FILENO))
 			return STDIN_FILENO;
 		if (isatty(STDOUT_FILENO))
